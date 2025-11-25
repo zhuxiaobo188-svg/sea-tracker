@@ -1,119 +1,110 @@
-const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
-const bodyParser = require('body-parser');
-const cors = require('cors');
-const app = express();
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>海运物流跟踪</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
+        .navbar-brand { font-weight: bold; color: #0d6efd; display: flex; align-items: center; gap: 10px; }
+        .search-box { max-width: 800px; margin: 0 auto; margin-top: 80px; }
+        .custom-input { border-right: none; padding: 12px; }
+        .input-group-text { background: white; border-left: none; }
+        .pill-example { cursor: pointer; font-size: 0.85rem; background: white; border: 1px solid #dee2e6; color: #6c757d; padding: 5px 15px; border-radius: 50px; margin: 0 5px; transition: 0.2s; }
+        .pill-example:hover { background: #e9ecef; }
+        .empty-state { background: #f1f3f5; border-radius: 12px; padding: 60px 20px; text-align: center; margin-top: 40px; }
+        .empty-icon { font-size: 50px; color: #0d6efd; background: #d0e1fd; width: 80px; height: 80px; line-height: 80px; border-radius: 50%; margin: 0 auto 20px; }
+        /* 轨迹样式 */
+        .timeline { border-left: 2px solid #dee2e6; margin-left: 20px; padding-left: 30px; margin-top: 30px; text-align: left;}
+        .timeline-item { position: relative; margin-bottom: 30px; }
+        .timeline-item::before { content: ''; position: absolute; left: -36px; top: 5px; width: 14px; height: 14px; background: #0d6efd; border-radius: 50%; }
+    </style>
+</head>
+<body>
 
-app.use(cors());
-app.use(bodyParser.json());
-
-// 初始化数据库 (注意：Render免费版重启后数据会重置，仅供演示)
-const db = new sqlite3.Database(':memory:'); 
-// 为了防止报错，这里暂时用内存模式，或者文件模式 'shipping.db'
-
-db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tracking_number TEXT,
-        status TEXT,
-        location TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    // 预设一条数据方便你测试
-    db.run(`INSERT INTO logs (tracking_number, status, location) VALUES ('CN888', '已发货', '上海港')`);
-});
-
-// API 接口
-app.get('/api/track/:id', (req, res) => {
-    db.all("SELECT * FROM logs WHERE tracking_number = ? ORDER BY timestamp DESC", [req.params.id], (err, rows) => {
-        res.json({ logs: rows || [] });
-    });
-});
-
-app.post('/api/update', (req, res) => {
-    const { no, status, loc, key } = req.body;
-    if (key !== 'admin123') return res.json({ success: false, msg: '密码错误' });
-    db.run("INSERT INTO logs (tracking_number, status, location) VALUES (?,?,?)", [no, status, loc], (err) => {
-        if (err) return res.json({ success: false, msg: err.message });
-        res.json({ success: true });
-    });
-});
-
-// 首页 (客户查询)
-app.get('/', (req, res) => {
-    res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>海运查询</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body class="bg-light p-4">
-        <div class="container" style="max-width:600px">
-            <div class="card shadow">
-                <div class="card-body text-center">
-                    <h3>🚢 海运追踪</h3>
-                    <p class="text-muted">测试单号: CN888</p>
-                    <input id="no" class="form-control mb-3" placeholder="输入单号...">
-                    <button onclick="track()" class="btn btn-primary w-100">查询</button>
-                    <div id="res" class="mt-4 text-start"></div>
-                    <hr>
-                    <a href="/admin" class="small">管理员入口</a>
-                </div>
+    <!-- 顶部导航 -->
+    <nav class="navbar bg-white border-bottom px-4">
+        <div class="navbar-brand">
+            <i class="fa-solid fa-ship fa-lg"></i>
+            <div>
+                <div style="line-height:1; font-size:1.2rem;">海运物流跟踪</div>
+                <div style="font-size:0.7rem; color:#6c757d; font-weight:normal;">海洋货运物流</div>
             </div>
         </div>
-        <script>
-            async function track() {
-                const no = document.getElementById('no').value;
-                const res = await fetch('/api/track/' + no);
-                const data = await res.json();
-                let h = '';
-                if(data.logs && data.logs.length) {
-                    data.logs.forEach(l => h += '<div class="alert alert-info"><b>'+l.status+'</b><br>'+l.location+'<br><small>'+l.timestamp+'</small></div>');
-                } else { h = '无记录'; }
-                document.getElementById('res').innerHTML = h;
-            }
-        </script>
-    </body>
-    </html>
-    `);
-});
+        <div class="text-muted"><i class="fa-solid fa-language"></i> EN</div>
+    </nav>
 
-// 后台页
-app.get('/admin', (req, res) => {
-    res.send(`
-    <!DOCTYPE html>
-    <html>
-    <body class="p-4">
-        <div style="max-width:400px; margin:0 auto">
-            <h3>后台录入</h3>
-            <input id="n" placeholder="单号" style="display:block; width:100%; margin-bottom:10px; padding:8px;">
-            <input id="s" placeholder="状态" style="display:block; width:100%; margin-bottom:10px; padding:8px;">
-            <input id="l" placeholder="位置" style="display:block; width:100%; margin-bottom:10px; padding:8px;">
-            <input id="k" type="password" value="admin123" style="display:block; width:100%; margin-bottom:10px; padding:8px;">
-            <button onclick="sub()" style="padding:10px 20px;">提交</button>
+    <!-- 主内容区 -->
+    <div class="container text-center search-box">
+        <h2 class="fw-bold mb-2">跟踪您的货物</h2>
+        <p class="text-muted mb-4">输入跟踪单号查看实时货物状态</p>
+
+        <!-- 搜索框 -->
+        <div class="input-group shadow-sm mb-3">
+            <span class="input-group-text bg-white border-end-0 ps-3"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+            <input type="text" id="searchInput" class="form-control custom-input border-start-0" placeholder="输入跟踪单号 ( 例如 : MAEU123456789 )">
+            <button class="btn btn-primary px-4 fw-bold" onclick="track()">查询</button>
         </div>
-        <script>
-            async function sub() {
-                await fetch('/api/update', {
-                    method:'POST',
-                    headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({
-                        no: document.getElementById('n').value,
-                        status: document.getElementById('s').value,
-                        loc: document.getElementById('l').value,
-                        key: document.getElementById('k').value
-                    })
-                });
-                alert('成功');
-            }
-        </script>
-    </body>
-    </html>
-    `);
-});
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('Server is running'));
+        <!-- 示例单号 -->
+        <div class="mb-4">
+            <span class="text-muted small me-2">试试这些示例跟踪单号 :</span>
+            <span class="pill-example" onclick="setDemo('MAEU123456789')">MAEU123456789</span>
+            <span class="pill-example" onclick="setDemo('COSC0987654321')">COSC0987654321</span>
+        </div>
+
+        <!-- 空状态展示 (默认显示这个) -->
+        <div id="emptyState" class="empty-state">
+            <div class="empty-icon"><i class="fa-solid fa-ship"></i></div>
+            <h5 class="fw-bold">输入跟踪单号开始查询</h5>
+            <p class="text-muted small mb-0">跟踪您的海运货物，查看船舶位置、预计到达时间和货物运输里程碑等详细信息。</p>
+        </div>
+
+        <!-- 结果展示区 (默认隐藏) -->
+        <div id="resultState" class="card shadow-sm mt-4 p-4" style="display: none;">
+            <h5 class="text-start border-bottom pb-2">📦 运单号: <span id="resNum" class="text-primary"></span></h5>
+            <div class="timeline" id="timelineBox"></div>
+        </div>
+    </div>
+
+    <script>
+        function setDemo(val) { document.getElementById('searchInput').value = val; }
+
+        async function track() {
+            const num = document.getElementById('searchInput').value;
+            if(!num) return alert("请输入单号");
+
+            const res = await fetch('/api/track/' + num);
+            const data = await res.json();
+            
+            const emptyDiv = document.getElementById('emptyState');
+            const resultDiv = document.getElementById('resultState');
+            const timeline = document.getElementById('timelineBox');
+
+            if(data.logs && data.logs.length > 0) {
+                // 有数据，隐藏空状态，显示结果
+                emptyDiv.style.display = 'none';
+                resultDiv.style.display = 'block';
+                document.getElementById('resNum').innerText = num;
+                
+                let html = '';
+                data.logs.forEach(log => {
+                    html += `
+                    <div class="timeline-item">
+                        <div class="fw-bold text-dark">${log.status}</div>
+                        <div class="text-muted small"><i class="fa-solid fa-location-dot me-1"></i> ${log.location}</div>
+                        <div class="text-secondary small mt-1">${new Date(log.timestamp).toLocaleString()}</div>
+                    </div>`;
+                });
+                timeline.innerHTML = html;
+            } else {
+                alert("未找到该运单信息，请先去后台录入！");
+                emptyDiv.style.display = 'block';
+                resultDiv.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
